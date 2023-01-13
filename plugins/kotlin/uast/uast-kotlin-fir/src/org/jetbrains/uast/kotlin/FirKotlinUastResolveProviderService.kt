@@ -188,15 +188,23 @@ interface FirKotlinUastResolveProviderService : BaseKotlinUastResolveProviderSer
 
     override fun getReferenceVariants(ktExpression: KtExpression, nameHint: String): Sequence<PsiElement> {
         analyzeForUast(ktExpression) {
-            return ktExpression.collectCallCandidates().asSequence().mapNotNull {
-                when (val candidate = it.candidate) {
-                    is KtFunctionCall<*> -> {
-                        toPsiMethod(candidate.partiallyAppliedSymbol.symbol, ktExpression)
+            return sequence {
+                ktExpression.collectCallCandidates().forEach { candidateInfo ->
+                    when (val candidate = candidateInfo.candidate) {
+                        is KtFunctionCall<*> -> {
+                            toPsiMethod(candidate.partiallyAppliedSymbol.symbol, ktExpression)?.let { yield(it) }
+                        }
+                        is KtCompoundVariableAccessCall -> {
+                            psiForUast(candidate.partiallyAppliedSymbol.symbol, ktExpression.project)?.let { yield(it) }
+                            toPsiMethod(candidate.compoundAccess.operationPartiallyAppliedSymbol.symbol, ktExpression)?.let { yield(it) }
+                        }
+                        is KtCompoundArrayAccessCall -> {
+                            toPsiMethod(candidate.getPartiallyAppliedSymbol.symbol, ktExpression)?.let { yield(it) }
+                            toPsiMethod(candidate.setPartiallyAppliedSymbol.symbol, ktExpression)?.let { yield(it) }
+                            toPsiMethod(candidate.compoundAccess.operationPartiallyAppliedSymbol.symbol, ktExpression)?.let { yield(it) }
+                        }
+                        else -> {}
                     }
-                    is KtCompoundAccessCall -> {
-                        toPsiMethod(candidate.compoundAccess.operationPartiallyAppliedSymbol.symbol, ktExpression)
-                    }
-                    else -> null
                 }
             }
         }
